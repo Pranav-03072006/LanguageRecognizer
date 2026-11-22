@@ -209,6 +209,50 @@ curl http://localhost:8000/api/health/
 
 ---
 
+## ⚡ Deployment Guide (GitHub & Vercel)
+
+The project includes complete serverless configuration for [Vercel](https://vercel.com) (`vercel.json`, `build_files.sh`, `api/index.py`, `.vercelignore`) and is configured for your GitHub account [`Pranav-03072006`](https://github.com/Pranav-03072006).
+
+### Step 1: Push to GitHub
+
+1. Create a new empty repository on GitHub at **[github.com/new](https://github.com/new)**:
+   - **Repository name**: `LanguageRecognizer`
+   - **Visibility**: Public or Private
+   - **Initialize with**: *Leave all checkboxes unchecked* (no README, no .gitignore, no license)
+   - Click **Create repository**
+
+2. Push the committed code:
+   ```bash
+   git push -u origin main
+   ```
+   *(Origin is already configured to `https://github.com/Pranav-03072006/LanguageRecognizer.git`)*
+
+### Step 2: Deploy to Vercel
+
+#### Recommended: 1-Click Import via Vercel Dashboard
+1. Go to [vercel.com/new](https://vercel.com/new).
+2. Under **Import Git Repository**, select your `LanguageRecognizer` repository.
+3. In **Project Settings**:
+   - **Framework Preset**: Other (automatically detected from `vercel.json`)
+   - **Build Command**: Automatically handled by `build_files.sh`
+   - **Environment Variables** (Optional):
+     - `SECRET_KEY`: (auto-generated or custom string)
+     - `LLM_PROVIDER`: `gemini` (or `openai`)
+     - `LLM_API_KEY`: *(Optional: your Gemini or OpenAI API key; leave empty for offline fallback)*
+     - `LLM_MODEL`: `gemini-2.5-flash`
+4. Click **Deploy**. Vercel will install dependencies, collect static files, and provide your live `https://*.vercel.app` URL!
+
+#### CLI Deployment:
+```bash
+# Log in to Vercel
+vercel login
+
+# Deploy production build
+vercel --prod
+```
+
+---
+
 ## 🧪 Testing & Code Quality
 
 ### Running Unit Tests

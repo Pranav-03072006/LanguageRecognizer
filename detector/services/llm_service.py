@@ -12,6 +12,8 @@ from typing import Any, Dict
 
 from django.conf import settings
 
+from .lexicon import lookup_romanized
+
 logger = logging.getLogger("llm_service")
 
 # Curated linguistic profiles for all 22 languages from the dataset
@@ -438,39 +440,56 @@ class DirectLLMService:
         """
         Returns rich curated linguistic knowledge when LLM API key is absent or call fails.
         """
+        lex_match = lookup_romanized(text)
+        target_lang = lex_match["language"] if lex_match else language
+
         profile = None
         for key, val in FALLBACK_LINGUISTIC_PROFILES.items():
-            if key.lower() == language.lower():
+            if key.lower() == target_lang.lower():
                 profile = val.copy()
                 break
 
         if not profile:
             profile = {
-                "native_name": language,
+                "native_name": target_lang,
                 "family": "Natural Human Language",
                 "script": "Standard Orthography",
                 "speakers": "Global Community",
                 "word_order": "Variable / Canonical",
                 "features": "Standard phonological and morphosyntactic inventory.",
-                "overview": f"{language} is a recognized world language detected by the classifier.",
-                "fun_fact": f"{language} possesses distinct orthographic and phonetic patterns.",
+                "overview": f"{target_lang} is a recognized world language detected by the classifier.",
+                "fun_fact": f"{target_lang} possesses distinct orthographic and phonetic patterns.",
             }
+
+        # Always use the language's own autonym (e.g. "Français") — not the word's native script
+        native_name = profile.get("native_name", target_lang)
+
+        if lex_match:
+            translation = lex_match["meaning"]
+            overview = lex_match["explanation"]
+            word_native_script = lex_match["native"]
+        else:
+            translation = "Translation requires active LLM API key; showing verified linguistic profile."
+            overview = profile.get("overview", "")
+            word_native_script = ""
 
         return {
             "source": "fallback",
             "provider": "rule_based_knowledge_base",
             "status": "ready",
             "reason": reason or "Running in offline/curated mode (no external LLM key required).",
-            "language": language,
-            "native_name": profile.get("native_name", language),
+            "language": target_lang,
+            "native_name": native_name,
+            "word_native_script": word_native_script,
             "language_family": profile.get("family", "Unknown"),
             "writing_script": profile.get("script", "Unknown"),
             "speakers_estimate": profile.get("speakers", "Unknown"),
             "word_order": profile.get("word_order", "SVO"),
             "linguistic_features": profile.get("features", ""),
-            "overview": profile.get("overview", ""),
+            "overview": overview,
             "fun_fact": profile.get("fun_fact", ""),
-            "translation_or_gist": "Translation requires active LLM API key; showing verified linguistic profile.",
+            "translation_or_gist": translation,
+            "meaning": lex_match["meaning"] if lex_match else "",
         }
 
     def call_gemini(self, language: str, text: str) -> Dict[str, Any]:

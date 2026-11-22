@@ -48,6 +48,14 @@ class ModelServiceTests(TestCase):
                 self.assertGreaterEqual(result["confidence"], 50.0)
                 self.assertEqual(len(result["top_probabilities"]), min(5, len(self.service.classes)))
 
+    def test_sayonara_and_romanized_phrases(self):
+        """Verify that romanized loanwords like 'Sayonara' accurately predict Japanese with meaning."""
+        result = self.service.predict("Sayonara")
+        self.assertEqual(result["predicted_language"], "Japanese")
+        self.assertGreaterEqual(result["confidence"], 90.0)
+        self.assertIn("Goodbye", result["meaning"]["translation"])
+        self.assertEqual(result["meaning"]["native_script"], "さようなら")
+
     def test_empty_input_validation(self):
         """Verify that empty strings or whitespace raise ValueError."""
         with self.assertRaises(ValueError):

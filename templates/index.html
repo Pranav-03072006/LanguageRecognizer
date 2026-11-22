@@ -251,6 +251,27 @@
                 <!-- Active Results Container (Initially Hidden) -->
                 <div id="results-container" class="hidden space-y-6">
 
+                    <!-- Word / Phrase Meaning Card -->
+                    <div id="meaning-card" class="bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900 text-white rounded-2xl p-6 shadow-md border border-indigo-700/50 relative overflow-hidden">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-400 text-slate-950 uppercase tracking-wider">
+                                Word / Phrase Meaning
+                            </span>
+                            <span id="meaning-native-script" class="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-white/15 text-indigo-100 border border-white/20 backdrop-blur-sm">
+                                さようなら
+                            </span>
+                        </div>
+                        <div class="mt-3">
+                            <span class="text-xs text-indigo-200 uppercase font-semibold tracking-wider">English Translation</span>
+                            <h4 id="meaning-translation-text" class="text-2xl font-black text-amber-300 tracking-tight mt-0.5">
+                                "Goodbye / Farewell"
+                            </h4>
+                        </div>
+                        <p id="meaning-explanation-text" class="text-xs text-indigo-100/90 mt-2.5 leading-relaxed border-t border-indigo-700/60 pt-2.5">
+                            Loading explanation...
+                        </p>
+                    </div>
+
                     <!-- Primary Prediction Card -->
                     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 relative overflow-hidden">
                         <div class="flex items-center justify-between mb-4">

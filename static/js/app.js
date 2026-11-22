@@ -25,6 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Results Display
     const resultsPlaceholder = document.getElementById('results-placeholder');
     const resultsContainer = document.getElementById('results-container');
+    const meaningCard = document.getElementById('meaning-card');
+    const meaningNativeScript = document.getElementById('meaning-native-script');
+    const meaningTranslationText = document.getElementById('meaning-translation-text');
+    const meaningExplanationText = document.getElementById('meaning-explanation-text');
     const predictedLanguageName = document.getElementById('predicted-language-name');
     const predictedNativeName = document.getElementById('predicted-native-name');
     const confidenceBadge = document.getElementById('confidence-badge');
@@ -248,6 +252,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const pred = data.prediction || {};
         const stats = data.stats || {};
         const ai = data.ai_insights || {};
+        const meaning = data.meaning || {};
+
+        // 0. Word / Phrase Meaning Card
+        const translation = meaning.translation || ai.translation_or_gist || '';
+        const nativeScript = meaning.native_script || ai.native_name || '';
+        const explanation = meaning.explanation || ai.overview || '';
+
+        if (translation && translation !== 'Translation requires active LLM API key; showing verified linguistic profile.') {
+            if (meaningCard) {
+                meaningCard.classList.remove('hidden');
+                meaningTranslationText.textContent = `"${translation}"`;
+                meaningNativeScript.textContent = nativeScript || pred.language;
+                meaningExplanationText.textContent = explanation;
+            }
+        } else {
+            if (meaningCard) {
+                meaningCard.classList.add('hidden');
+            }
+        }
 
         // 1. Primary Prediction Card
         predictedLanguageName.textContent = pred.language || 'Unknown';

@@ -224,6 +224,15 @@ def detect_api(request: HttpRequest) -> JsonResponse:
     llm_service = DirectLLMService()
     ai_insights = llm_service.get_enrichment(language=predicted_language, text=clean_text)
 
+    # Consolidate meaning and translation data
+    meaning_data = prediction_result.get("meaning", {})
+    if not meaning_data.get("translation") and ai_insights.get("translation_or_gist"):
+        meaning_data["translation"] = ai_insights.get("translation_or_gist", "")
+    if not meaning_data.get("native_script") and ai_insights.get("native_name"):
+        meaning_data["native_script"] = ai_insights.get("native_name", "")
+    if not meaning_data.get("explanation") and ai_insights.get("overview"):
+        meaning_data["explanation"] = ai_insights.get("overview", "")
+
     response_payload = {
         "success": True,
         "text": clean_text,
@@ -232,6 +241,7 @@ def detect_api(request: HttpRequest) -> JsonResponse:
             "confidence": prediction_result["confidence"],
             "top_probabilities": prediction_result["top_probabilities"],
         },
+        "meaning": meaning_data,
         "stats": prediction_result["stats"],
         "ai_insights": ai_insights,
         "model_metadata": prediction_result["model_metadata"],

@@ -102,6 +102,111 @@ def train_model(
     df["language"] = df["language"].astype(str).str.strip()
     df = df[df["Text"].str.len() > 0]
 
+    # Augment with conversational phrases across 22 classes so common words
+    # (like hello, hi, thank you, please, etc.) are properly represented
+    conversational_samples = [
+        # English
+        ("hello how are you doing today? hello everyone and welcome to our community.", "English"),
+        ("hi there, hello and good morning to all of you, hope you are having a wonderful day.", "English"),
+        ("thank you very much for your kind help and support, thanks a lot for everything.", "English"),
+        ("please let me know if you need anything else, you are welcome anytime, thank you.", "English"),
+        ("goodbye, see you soon, bye for now, take care and have a great weekend.", "English"),
+        ("yes that is right, yeah sure absolutely no problem at all, okay great.", "English"),
+        ("what is your name? my name is John, nice to meet you, where are you from?", "English"),
+        ("good evening and good night, sleep well and see you tomorrow morning.", "English"),
+        ("hello world, this is a test greeting, welcome to the language recognizer application.", "English"),
+        ("how are you feeling today? i am doing fine, thank you for asking.", "English"),
+        ("excuse me, pardon me, sorry about that, no worries, it is totally okay.", "English"),
+        ("cheers, congratulations on your great success, happy birthday and best wishes.", "English"),
+        # Dutch
+        ("hallo hoe gaat het met jou vandaag? hallo allemaal en welkom hier.", "Dutch"),
+        ("goedemorgen allemaal, ik wens jullie een hele fijne en prettige dag toe.", "Dutch"),
+        ("hartelijk dank voor uw hulp en ondersteuning, dank je wel voor alles.", "Dutch"),
+        ("alsjeblieft, graag gedaan, tot ziens en een prettige dag verder.", "Dutch"),
+        ("ja dat klopt inderdaad, nee dat is niet waar, geen enkel probleem.", "Dutch"),
+        ("wat is jouw naam? mijn naam is Jan, aangenaam kennis te maken.", "Dutch"),
+        ("goedenavond en welterusten voor straks, tot morgenochtend allemaal.", "Dutch"),
+        # French
+        ("bonjour comment allez-vous aujourd'hui? bonjour à tous et bienvenue.", "French"),
+        ("salut tout le monde, bonjour et bonne journée à vous tous.", "French"),
+        ("merci beaucoup pour votre aide précieuse, merci infiniment pour tout.", "French"),
+        ("s'il vous plaît, je vous en prie, de rien, avec grand plaisir.", "French"),
+        ("au revoir, à bientôt, à plus tard, prenez bien soin de vous.", "French"),
+        ("comment vous appelez-vous? je m'appelle Pierre, enchanté de faire votre connaissance.", "French"),
+        # Spanish
+        ("hola cómo estás hoy? hola a todos y bienvenidos a nuestra comunidad.", "Spanish"),
+        ("buenos días a todos, espero que tengan un excelente y maravilloso día.", "Spanish"),
+        ("muchas gracias por toda tu ayuda y apoyo, gracias de todo corazón.", "Spanish"),
+        ("por favor dime si necesitas algo, de nada, un placer ayudarte.", "Spanish"),
+        ("adiós, hasta luego, hasta pronto, nos vemos luego, cuídate mucho.", "Spanish"),
+        ("cómo te llamas? me llamo Carlos, mucho gusto en conocerte, de dónde eres?", "Spanish"),
+        # Latin
+        ("salve quomodo vales hodie? salvete omnes et bene venistis ad nos.", "Latin"),
+        ("bonum mane omnibus vobis, opto ut diem felicissimum habeatis.", "Latin"),
+        ("gratias maximas tibi ago pro auxilio tuo et benevolentia tua.", "Latin"),
+        ("quaeso te, libenter feci, nihil est, gaudeo te iuvisse.", "Latin"),
+        ("vale, valete omnes, in proximum videmus, cura ut valeas.", "Latin"),
+        # Swedish
+        ("hej hur mår du idag? hej alla och varmt välkomna hit till oss.", "Swedish"),
+        ("god morgon allihopa, jag hoppas att ni har en riktigt trevlig och bra dag.", "Swedish"),
+        ("tack så mycket för all din hjälp och ditt stöd, stort tack för allt.", "Swedish"),
+        ("varsågod, det var så lite så, ha en fortsatt fin och trevlig dag.", "Swedish"),
+        ("hej då, vi ses snart igen, ta hand om dig och ha en underbar helg.", "Swedish"),
+        # Portugese
+        ("olá como você está hoje? olá a todos e bem-vindos à nossa comunidade.", "Portugese"),
+        ("bom dia a todos, espero que vocês tenham um dia maravilhoso e produtivo.", "Portugese"),
+        ("muito obrigado por toda a sua ajuda e apoio, agradeço muito por tudo.", "Portugese"),
+        ("por favor me avise se precisar, de nada, foi um prazer te ajudar.", "Portugese"),
+        ("adeus, até logo, até breve, até mais, tchau tchau, cuide-se bem.", "Portugese"),
+        # Russian
+        ("привет как дела сегодня? здравствуйте всем и добро пожаловать к нам.", "Russian"),
+        ("доброе утро всем, желаю вам отличного и продуктивного дня.", "Russian"),
+        ("большое спасибо за вашу помощь и поддержку, спасибо за все.", "Russian"),
+        ("пожалуйста, не за что, рад был помочь, обращайтесь в любое время.", "Russian"),
+        ("до свидания, пока, до скорой встречи, берегите себя и удачи.", "Russian"),
+        # Hindi
+        ("नमस्ते आप आज कैसे हैं? आप सभी का यहाँ हार्दिक स्वागत है।", "Hindi"),
+        ("शुभ प्रभात, आशा है कि आपका दिन बहुत अच्छा और सुखद रहेगा।", "Hindi"),
+        ("आपकी सहायता और सहयोग के लिए बहुत-बहुत धन्यवाद, शुक्रिया।", "Hindi"),
+        ("कृपया मुझे बताएं, आपका स्वागत है, कोई बात नहीं, खुशी हुई।", "Hindi"),
+        ("अलविदा, फिर मिलेंगे, अपना ख्याल रखें और सुरक्षित रहें।", "Hindi"),
+        # Arabic
+        ("مرحباً كيف حالك اليوم؟ أهلاً وسهلاً بكم جميعاً في موقعنا.", "Arabic"),
+        ("صباح الخير للجميع، أتمنى لكم يوماً سعيداً ومميزاً وموفقاً.", "Arabic"),
+        ("شكراً جزيلاً لك على كل مساعدتك ودعمك الكريم، شكراً لك.", "Arabic"),
+        ("من فضلك أخبرني، عَفواً، على الرحب والسعة، لا شكر على واجب.", "Arabic"),
+        ("مع السلامة، إلى اللقاء قريباً، دمتم بخير وفي رعاية الله.", "Arabic"),
+        # Japanese
+        ("こんにちは今日はどうですか？皆さんようこそいらっしゃいました。", "Japanese"),
+        ("おはようございます、今日も良い一日をお過ごしください。", "Japanese"),
+        ("ご親切な支援をいただき、本当にありがとうございました。", "Japanese"),
+        ("さようなら、また会いましょう、どうぞお元気でお過ごしください。", "Japanese"),
+        # Chinese
+        ("你好今天怎么样？欢迎大家来到我们的网站，大家辛苦了。", "Chinese"),
+        ("早上好，祝愿大家今天都有一个非常愉快顺利的一天。", "Chinese"),
+        ("非常感谢您的帮助与大力支持，十分感谢您的付出。", "Chinese"),
+        ("再见，期待下次再会，请大家多多保重身体，一路顺风。", "Chinese"),
+        # Korean
+        ("안녕하세요 오늘 어떻게 지내세요? 여러분 모두를 진심으로 환영합니다.", "Korean"),
+        ("좋은 아침입니다, 오늘 하루도 행복하고 즐거운 시간 보내세요.", "Korean"),
+        ("도와주셔서 진심으로 감사드립니다, 정말 대단히 감사합니다.", "Korean"),
+        ("안녕히 계세요, 다음에 또 만나요, 항상 건강하시길 바랍니다.", "Korean"),
+        # Turkish
+        ("merhaba bugün nasılsın? herkese merhaba ve aramıza hoş geldiniz.", "Turkish"),
+        ("günaydın arkadaşlar, hepinize harika ve verimli bir gün dilerim.", "Turkish"),
+        ("tüm yardımlarınız ve desteğiniz için çok teşekkür ederim, sağ olun.", "Turkish"),
+        ("hoşça kalın, güle güle, yakında görüşmek üzere, kendinize iyi bakın.", "Turkish"),
+    ]
+
+    aug_rows = []
+    for txt, lng in conversational_samples:
+        for _ in range(5):
+            aug_rows.append({"Text": txt, "language": lng})
+    if aug_rows:
+        aug_df = pd.DataFrame(aug_rows)
+        df = pd.concat([df, aug_df], ignore_index=True)
+        logger.info("Added %d conversational augmented rows for key vocabularies.", len(aug_rows))
+
     if sample_size and sample_size < len(df):
         logger.info("Sampling %d rows for rapid training / test verification...", sample_size)
         df = df.groupby("language", group_keys=False).apply(

@@ -56,6 +56,27 @@ class ModelServiceTests(TestCase):
         self.assertIn("Goodbye", result["meaning"]["translation"])
         self.assertEqual(result["meaning"]["native_script"], "さようなら")
 
+    def test_conversational_greetings_accuracy(self):
+        """Verify common conversational words like 'Hello', 'Hi', 'Bonjour', 'Hola' predict correctly."""
+        greetings = [
+            ("Hello", "English"),
+            ("hello", "English"),
+            ("hi", "English"),
+            ("how are you", "English"),
+            ("thank you", "English"),
+            ("welcome", "English"),
+            ("Bonjour", "French"),
+            ("Hola", "Spanish"),
+            ("Sayonara", "Japanese"),
+            ("Namaste", "Hindi"),
+            ("Dank je", "Dutch"),
+        ]
+        for phrase, expected in greetings:
+            with self.subTest(phrase=phrase):
+                res = self.service.predict(phrase)
+                self.assertEqual(res["predicted_language"], expected)
+                self.assertGreaterEqual(res["confidence"], 90.0)
+
     def test_empty_input_validation(self):
         """Verify that empty strings or whitespace raise ValueError."""
         with self.assertRaises(ValueError):

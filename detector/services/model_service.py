@@ -153,12 +153,20 @@ class LanguageModelService:
         lex_match = lookup_romanized(clean_text)
         if lex_match:
             predicted_lang = lex_match["language"]
-            confidence_pct = 98.6
+            confidence_pct = 99.2
             other_langs = [c for c in self.classes if c != predicted_lang][:4]
-            probabilities = [{"language": predicted_lang, "probability": 98.6}]
+            probabilities = [{"language": predicted_lang, "probability": 99.2}]
             for o_lang in other_langs:
-                probabilities.append({"language": o_lang, "probability": 0.35})
-            stats["detected_script"] = f"Latin (Romanized {predicted_lang})"
+                probabilities.append({"language": o_lang, "probability": 0.20})
+
+            non_latin_langs = {
+                "Japanese", "Chinese", "Hindi", "Arabic", "Russian",
+                "Korean", "Thai", "Tamil", "Urdu", "Persian", "Pushto"
+            }
+            if predicted_lang in non_latin_langs:
+                stats["detected_script"] = f"Latin (Romanized {predicted_lang})"
+            else:
+                stats["detected_script"] = "Latin"
 
             return {
                 "predicted_language": predicted_lang,
@@ -170,10 +178,10 @@ class LanguageModelService:
                     "translation": lex_match["meaning"],
                     "explanation": lex_match["explanation"],
                     "native_script": lex_match["native"],
-                    "source": "romanized_lexicon",
+                    "source": "conversational_lexicon",
                 },
                 "model_metadata": {
-                    "architecture": "Transliterated Lexicon + Naive Bayes",
+                    "architecture": "Conversational Lexicon + Naive Bayes",
                     "total_classes": len(self.classes),
                     "tokens_recognized": 1,
                 },

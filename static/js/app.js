@@ -57,7 +57,81 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyEmpty = document.getElementById('history-empty');
     const clearHistoryBtn = document.getElementById('clear-history-btn');
 
+    // Gemini API Key Modal Elements
+    const llmKeyBtn = document.getElementById('llm-key-btn');
+    const llmStatusLabel = document.getElementById('llm-status-label');
+    const apiKeyModal = document.getElementById('api-key-modal');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const cancelModalBtn = document.getElementById('cancel-modal-btn');
+    const saveApiKeyBtn = document.getElementById('save-api-key-btn');
+    const removeApiKeyBtn = document.getElementById('remove-api-key-btn');
+    const geminiApiKeyInput = document.getElementById('gemini-api-key-input');
+
     const STORAGE_KEY = 'polyglot_detection_history';
+    const GEMINI_KEY_STORAGE = 'polyglot_gemini_api_key';
+
+    // -------------------------------------------------------------
+    // Gemini API Key Management
+    // -------------------------------------------------------------
+    function updateApiKeyUI() {
+        const key = localStorage.getItem(GEMINI_KEY_STORAGE) || '';
+        if (llmStatusLabel && llmKeyBtn) {
+            if (key) {
+                llmStatusLabel.textContent = 'LLM: Gemini (Connected)';
+                llmKeyBtn.className = 'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all shadow-sm cursor-pointer border hover:shadow-md bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100';
+                const svg = llmKeyBtn.querySelector('svg');
+                if (svg) svg.className = 'w-3.5 h-3.5 text-emerald-600';
+            } else {
+                llmStatusLabel.textContent = 'LLM: Gemini (Click to Add Key)';
+                llmKeyBtn.className = 'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all shadow-sm cursor-pointer border hover:shadow-md bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100';
+                const svg = llmKeyBtn.querySelector('svg');
+                if (svg) svg.className = 'w-3.5 h-3.5 text-amber-600';
+            }
+        }
+    }
+
+    if (llmKeyBtn && apiKeyModal) {
+        llmKeyBtn.addEventListener('click', () => {
+            geminiApiKeyInput.value = localStorage.getItem(GEMINI_KEY_STORAGE) || '';
+            apiKeyModal.classList.remove('hidden');
+            geminiApiKeyInput.focus();
+        });
+
+        const closeModal = () => apiKeyModal.classList.add('hidden');
+        if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
+        if (cancelModalBtn) cancelModalBtn.addEventListener('click', closeModal);
+        apiKeyModal.addEventListener('click', (e) => {
+            if (e.target === apiKeyModal) closeModal();
+        });
+
+        if (saveApiKeyBtn) {
+            saveApiKeyBtn.addEventListener('click', () => {
+                const val = geminiApiKeyInput.value.trim();
+                if (val) {
+                    localStorage.setItem(GEMINI_KEY_STORAGE, val);
+                } else {
+                    localStorage.removeItem(GEMINI_KEY_STORAGE);
+                }
+                updateApiKeyUI();
+                closeModal();
+                // If there is text in input, auto re-run detection with new key
+                if (textInput.value.trim()) {
+                    performDetection();
+                }
+            });
+        }
+
+        if (removeApiKeyBtn) {
+            removeApiKeyBtn.addEventListener('click', () => {
+                localStorage.removeItem(GEMINI_KEY_STORAGE);
+                geminiApiKeyInput.value = '';
+                updateApiKeyUI();
+                closeModal();
+            });
+        }
+    }
+
+    updateApiKeyUI();
 
     // -------------------------------------------------------------
     // Helper: CSRF Token Cookie Retrieval
@@ -203,13 +277,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const csrftoken = getCookie('csrftoken');
+            const storedKey = localStorage.getItem(GEMINI_KEY_STORAGE) || '';
             const response = await fetch('/api/detect/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': csrftoken || '',
                 },
-                body: JSON.stringify({ text: text }),
+                body: JSON.stringify({
+                    text: text,
+                    api_key: storedKey,
+                }),
             });
 
             const data = await response.json();
@@ -254,16 +332,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const ai = data.ai_insights || {};
         const meaning = data.meaning || {};
 
-        // 0. Word / Phrase Meaning Card
+        // 0. Word / Phrase / Sentence Meaning Card
         const translation = meaning.translation || ai.translation_or_gist || '';
-        const nativeScript = meaning.native_script || ai.native_name || '';
+        const nativeScript = meaning.native_script || ai.word_native_script || ai.native_name || '';
         const explanation = meaning.explanation || ai.overview || '';
 
-        if (translation && translation !== 'Translation requires active LLM API key; showing verified linguistic profile.') {
+        if (translation && !translation.includes('Translation requires active LLM API key')) {
             if (meaningCard) {
                 meaningCard.classList.remove('hidden');
+                const wordsCount = (data.text || textInput.value || '').trim().split(/\s+/).length;
+                const meaningTag = meaningCard.querySelector('span');
+                if (meaningTag) {
+                    meaningTag.textContent = wordsCount > 1 ? 'Sentence Meaning & Translation' : 'Word / Phrase Meaning';
+                }
                 meaningTranslationText.textContent = `"${translation}"`;
-                meaningNativeScript.textContent = nativeScript || pred.language;
+                meaningNativeScript.textContent = nativeScript || (wordsCount > 1 ? `${pred.language} Text` : pred.language);
                 meaningExplanationText.textContent = explanation;
             }
         } else {

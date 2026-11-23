@@ -182,14 +182,25 @@ def detect_api(request: HttpRequest) -> JsonResponse:
     """
     # Parse payload
     input_text = ""
+    request_api_key = ""
     if request.content_type == "application/json":
         try:
             body = json.loads(request.body.decode("utf-8"))
             input_text = body.get("text", "")
+            request_api_key = (
+                body.get("api_key")
+                or request.headers.get("X-LLM-API-Key")
+                or getattr(settings, "LLM_API_KEY", "")
+            )
         except json.JSONDecodeError:
             return JsonResponse({"success": False, "error": "Invalid JSON format in request body."}, status=400)
     else:
         input_text = request.POST.get("text", "")
+        request_api_key = (
+            request.POST.get("api_key")
+            or request.headers.get("X-LLM-API-Key")
+            or getattr(settings, "LLM_API_KEY", "")
+        )
 
     # Input validation
     if not input_text or not input_text.strip():
@@ -219,19 +230,20 @@ def detect_api(request: HttpRequest) -> JsonResponse:
             status=500,
         )
 
-    # Perform Direct LLM enrichment (with rule-based fallback)
+    # Perform Direct LLM enrichment (with user key, environment key, or graceful fallback)
     predicted_language = prediction_result["predicted_language"]
-    llm_service = DirectLLMService()
+    llm_service = DirectLLMService(api_key=request_api_key)
     ai_insights = llm_service.get_enrichment(language=predicted_language, text=clean_text)
 
     # Consolidate meaning and translation data
     meaning_data = prediction_result.get("meaning", {})
     if not meaning_data.get("translation") and ai_insights.get("translation_or_gist"):
         meaning_data["translation"] = ai_insights.get("translation_or_gist", "")
-    if not meaning_data.get("native_script") and ai_insights.get("native_name"):
-        meaning_data["native_script"] = ai_insights.get("native_name", "")
-    if not meaning_data.get("explanation") and ai_insights.get("overview"):
-        meaning_data["explanation"] = ai_insights.get("overview", "")
+    if not meaning_data.get("native_script"):
+        meaning_data["native_script"] = ai_insights.get("word_native_script") or ai_insights.get("native_name", "")
+    if not meaning_data.get("explanation") or meaning_data.get("explanation", "").startswith("Statistical prediction"):
+        if ai_insights.get("overview"):
+            meaning_data["explanation"] = ai_insights.get("overview", "")
 
     response_payload = {
         "success": True,

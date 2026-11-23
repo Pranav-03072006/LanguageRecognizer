@@ -8,7 +8,7 @@ when LLM_API_KEY is not set or network/API calls fail.
 import json
 import logging
 import re
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from django.conf import settings
 
@@ -425,20 +425,55 @@ FALLBACK_LINGUISTIC_PROFILES: Dict[str, Dict[str, Any]] = {
 }
 
 
+LANG_CODE_MAP: Dict[str, str] = {
+    "English": "en", "French": "fr", "Spanish": "es", "German": "de",
+    "Dutch": "nl", "Russian": "ru", "Hindi": "hi", "Arabic": "ar",
+    "Japanese": "ja", "Chinese": "zh", "Korean": "ko", "Turkish": "tr",
+    "Italian": "it", "Swedish": "sv", "Indonesian": "id", "Portuguese": "pt",
+    "Portugese": "pt", "Romanian": "ro", "Estonian": "et", "Latin": "la",
+    "Tamil": "ta", "Urdu": "ur", "Persian": "fa", "Thai": "th",
+}
+
+
+def attempt_free_translation(text: str, source_lang: str) -> Optional[str]:
+    """
+    Attempts a fast free translation to English as an offline/no-key fallback.
+    Fails quickly and silently without raising exceptions.
+    """
+    if not text or not text.strip():
+        return None
+    try:
+        import urllib.parse
+        import urllib.request
+        sl = LANG_CODE_MAP.get(source_lang, "auto")
+        clean = text.strip()[:300]
+        encoded = urllib.parse.quote(clean)
+        url = f"https://api.mymemory.translated.net/get?q={encoded}&langpair={sl}|en"
+        req = urllib.request.Request(url, headers={"User-Agent": "PolyGlot/1.0"})
+        with urllib.request.urlopen(req, timeout=2.5) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+            translated = payload.get("responseData", {}).get("translatedText", "")
+            if translated and translated.strip() and "MYMEMORY" not in translated.upper():
+                return translated.strip()
+    except Exception:
+        pass
+    return None
+
+
 class DirectLLMService:
     """
     Direct LLM caller using official Python SDKs (google-genai or openai).
     No LangChain, No RAG, No vector stores.
     """
 
-    def __init__(self):
-        self.provider = getattr(settings, "LLM_PROVIDER", "gemini").lower()
-        self.api_key = getattr(settings, "LLM_API_KEY", "").strip()
+    def __init__(self, api_key: Optional[str] = None, provider: Optional[str] = None):
+        self.provider = (provider or getattr(settings, "LLM_PROVIDER", "gemini")).lower()
+        self.api_key = (api_key if api_key is not None else getattr(settings, "LLM_API_KEY", "")).strip()
         self.model_name = getattr(settings, "LLM_MODEL", "gemini-2.5-flash").strip()
 
     def get_fallback_profile(self, language: str, text: str, reason: str = "") -> Dict[str, Any]:
         """
-        Returns rich curated linguistic knowledge when LLM API key is absent or call fails.
+        Returns rich curated linguistic knowledge and translations when LLM API key is absent.
         """
         lex_match = lookup_romanized(text)
         target_lang = lex_match["language"] if lex_match else language
@@ -468,10 +503,22 @@ class DirectLLMService:
             translation = lex_match["meaning"]
             overview = lex_match["explanation"]
             word_native_script = lex_match["native"]
+        elif target_lang.lower() == "english":
+            # For English sentences, the translation is the text itself
+            translation = text.strip()
+            overview = f"English sentence: \"{text.strip()}\". {profile.get('overview', '')}"
+            word_native_script = text.strip()
         else:
-            translation = "Translation requires active LLM API key; showing verified linguistic profile."
-            overview = profile.get("overview", "")
-            word_native_script = ""
+            # For non-English sentences, try auto-translation fallback
+            auto_trans = attempt_free_translation(text, target_lang)
+            if auto_trans:
+                translation = auto_trans
+                overview = f"Translated: \"{auto_trans}\". {profile.get('overview', '')}"
+                word_native_script = text.strip()
+            else:
+                translation = f"Sample in {target_lang}: \"{text.strip()[:60]}\""
+                overview = profile.get("overview", "")
+                word_native_script = ""
 
         return {
             "source": "fallback",
@@ -489,7 +536,7 @@ class DirectLLMService:
             "overview": overview,
             "fun_fact": profile.get("fun_fact", ""),
             "translation_or_gist": translation,
-            "meaning": lex_match["meaning"] if lex_match else "",
+            "meaning": translation,
         }
 
     def call_gemini(self, language: str, text: str) -> Dict[str, Any]:
@@ -500,8 +547,8 @@ class DirectLLMService:
 
         client = genai.Client(api_key=self.api_key)
         prompt = (
-            f"You are an expert computational linguist. The user provided this sample text snippet:\n"
-            f"\"\"\"{text[:400]}\"\"\"\n\n"
+            f"You are an expert computational linguist and translator. The user provided this sample text snippet:\n"
+            f"\"\"\"{text[:600]}\"\"\"\n\n"
             f"The ML classifier detected the language as: '{language}'.\n\n"
             f"Please respond in valid JSON format ONLY, with the following exact keys:\n"
             f"1. 'language_family': Linguistic branch (e.g. 'Indo-European -> Romance')\n"
@@ -509,19 +556,31 @@ class DirectLLMService:
             f"3. 'native_name': Autonym/native name of the language (e.g. 'Français')\n"
             f"4. 'linguistic_overview': 2-3 concise sentences on classification, origin, and spread.\n"
             f"5. 'grammatical_traits': 1-2 key structural traits.\n"
-            f"6. 'translation_or_gist': Brief English translation or gist of the user's snippet.\n"
+            f"6. 'translation_or_gist': Precise English translation and full meaning of the user's snippet.\n"
             f"7. 'fun_fact': One engaging, true linguistic trivia fact about this language.\n\n"
             f"Return pure JSON without markdown code fences or backticks."
         )
 
-        model = self.model_name or "gemini-2.5-flash"
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt,
-        )
+        candidate_models = [self.model_name, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+        seen = set()
+        models_to_try = [m for m in candidate_models if m and not (m in seen or seen.add(m))]
 
-        raw_text = response.text or ""
-        return self._parse_llm_json(raw_text, language, text, provider_name="Google Gemini")
+        last_exc = None
+        for model in models_to_try:
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                )
+                raw_text = response.text or ""
+                return self._parse_llm_json(raw_text, language, text, provider_name="Google Gemini")
+            except Exception as exc:
+                last_exc = exc
+                continue
+
+        if last_exc:
+            raise last_exc
+        return self.get_fallback_profile(language, text, reason="Gemini models could not be reached.")
 
     def call_openai(self, language: str, text: str) -> Dict[str, Any]:
         """
